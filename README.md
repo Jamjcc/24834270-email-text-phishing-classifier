@@ -1,24 +1,29 @@
 # 24834270-email-text-phishing-classifier
 CPU-deployable phishing detector from email text — TF-IDF+SVM (cal.) vs BiGRU · Flask demo · F1/PR-AUC/ROC-AUC · notebooks + model artefacts
-phishing-email-text-classifier/
-├── src/
-│   └── serve_app.py          # Flask app (/predict), CPU-only inference
-├── models/                   # Tracked with Git LFS
-│   ├── tfidf_vectorizer.pkl
-│   ├── svm_phishing_model.pkl
-│   ├── tokenizer.pkl
-│   └── rnn_phishing_model.h5 # BiGRU weights
-├── notebooks/
-│   └── email_phising.ipynb   # Training & analysis (text pipeline)
-├── docs/
-│   ├── app.html              # (optional) UI screenshot/static
-│   └── figures/              # (optional) PR curves / confusions for README
-├── RUN.md                    # Short run & latency notes
-├── requirements.txt
-├── .gitattributes            # *.pkl / *.h5 via Git LFS
-├── .gitignore
-├── LICENSE                   # MIT
-└── README.md
+# CPU-Deployable Phishing Detection from Email Text
+**TF-IDF+SVM (calibrated) vs BiGRU (RNN)** — local, CPU-only demo with a minimal REST UI.
+
+> Primary metric: **F1** (also PR-AUC / ROC-AUC). Inference measured on **CPU** with batch size **1**.
+
+---
+
+## Quickstart
+
+#```bash
+# 1) Create & activate a virtualenv
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+
+# 2) Install
+pip install -r requirements.txt
+
+# 3) Run the demo (CPU)
+python src/serve_app.py
+# then open http://127.0.0.1:5000
+
 Data (training) & live feeds (qualitative only)
 
 This project trains only on email text (subject/body). Datasets are not redistributed here; download them directly:
