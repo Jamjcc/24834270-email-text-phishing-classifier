@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phishing Email Detector — Demo</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121820;
+      --text: #e6eef7;
+      --muted: #98a6b3;
+      --accent: #7aa2ff;
+      --good: #1db954;
+      --bad: #ff4d4f;
+      --warn: #f5a524;
+      --border: #1e2630;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    h1 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: .2px; }
+    .badge {
+      padding: 6px 10px; border-radius: 999px; font-size: .85rem; color: var(--text);
+      background: linear-gradient(90deg, rgba(122,162,255,.2), rgba(122,162,255,.05));
+      border: 1px solid var(--border);
+    }
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      .grid { grid-template-columns: 1.2fr .8fr; }
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
+    input[type="text"], textarea {
+      width: 100%; color: var(--text); background: #0e141b;
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+      outline: none;
+    }
+    textarea { min-height: 260px; resize: vertical; }
+    .row { display: flex; gap: 10px; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
+    .btn {
+      appearance: none; border: 1px solid var(--border); background: #1a2230;
+      color: var(--text); padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600;
+      transition: transform .03s ease, background .2s ease, border-color .2s ease;
+    }
+    .btn:hover { background: #202a3a; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--accent); color: #0b1020; border-color: transparent; }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .hint { color: var(--muted); font-size: .9rem; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .chip {
+      padding: 6px 10px; border-radius: 999px; border: 1px dashed var(--border); color: var(--muted);
+      cursor: pointer; user-select: none; background: #0e141b;
+    }
+    .chip:hover { color: var(--text); border-style: solid; }
+    .result {
+      padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: #0e141b;
+    }
+    .label {
+      display: inline-flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: .3px;
+      padding: 6px 10px; border-radius: 999px;
+    }
+    .label.good { background: rgba(29,185,84,.15); color: #d7ffe7; }
+    .label.bad  { background: rgba(255,77,79,.15); color: #ffe3e3; }
+    .label.warn { background: rgba(245,165,36,.15); color: #fff0d6; }
+    .progress {
+      height: 10px; background: #0b1016; border-radius: 999px; border: 1px solid var(--border);
+      overflow: hidden; margin-top: 10px;
+    }
+    .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--bad), var(--warn), var(--good)); transition: width .25s ease; }
+    .kvs { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin-top: 10px; }
+    .muted { color: var(--muted); }
+    .footer { margin-top: 10px; font-size: .85rem; color: var(--muted); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .spinner { width: 16px; height: 16px; border: 3px solid #1d2733; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .right { text-align: right; }
+    .count { font-size: .85rem; color: var(--muted); }
+    .danger { color: #ffb3b3; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Phishing Email Detector — Demo</h1>
+      <span class="badge" title="Local demo served by Flask">Local · POST <code>/predict</code></span>
+    </header>
+
+    <div class="grid">
+      <!-- INPUT CARD -->
+      <section class="card" aria-labelledby="inputTitle">
+        <h2 id="inputTitle" class="sr-only">Input</h2>
+
+        <label for="subject">Subject (optional)</label>
+        <input type="text" id="subject" placeholder="e.g., Action required: Verify your account" />
+
+        <label for="body" style="margin-top:12px;">Email body</label>
+        <textarea id="body" placeholder="Paste the email text here..."></textarea>
+        <div class="row" style="justify-content: space-between; margin-top: 6px;">
+          <div class="count" id="charCount">0 characters</div>
+          <div class="hint">Tip: Press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Enter</kbd> to classify</div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button id="btnClassify" class="btn primary">Classify</button>
+          <button id="btnClear" class="btn" type="button">Clear</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">Quick samples (click to fill):</div>
+        <div class="chips" id="samples"></div>
+      </section>
+
+      <!-- RESULT CARD -->
+      <aside class="card" aria-labelledby="resultTitle">
+        <h2 id="resultTitle" class="sr-only">Result</h2>
+        <div class="result" id="resultBox">
+          <div id="statusLine" class="row" style="justify-content: space-between;">
+            <span id="label" class="label warn">Awaiting input</span>
+            <span id="latency" class="muted">—</span>
+          </div>
+
+          <div class="progress" aria-hidden="true"><div id="bar" class="bar"></div></div>
+
+          <div class="kvs">
+            <div class="muted">Probability:</div><div id="prob">—</div>
+            <div class="muted">Threshold:</div><div id="threshold">0.50 (default)</div>
+            <div class="muted">Model:</div><div id="model">—</div>
+          </div>
+
+          <div class="footer" style="margin-top: 12px;">
+            <strong>Note:</strong> Educational demo. Always verify suspicious emails independently.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ---- Config ----
+    const PREDICT_URL = "/predict";         // Flask endpoint
+    const DEFAULT_THRESHOLD = 0.50;         // if your server returns 'threshold', we’ll show that instead
+    const MAX_CHARS = 20000;
+
+    // ---- Elements ----
+    const el = (id) => document.getElementById(id);
+    const subject = el("subject");
+    const body = el("body");
+    const btnClassify = el("btnClassify");
+    const btnClear = el("btnClear");
+    const label = el("label");
+    const prob = el("prob");
+    const threshold = el("threshold");
+    const model = el("model");
+    const bar = el("bar");
+    const latency = el("latency");
+    const charCount = el("charCount");
+    const samples = el("samples");
+
+    // ---- Sample emails (dummy, safe content) ----
+    const SAMPLE_SET = [
+      {
+        name: "Obvious phish",
+        text: `Dear user, your account will be suspended today. Verify your identity immediately:
+http://security-update-login.example.com
+Failure to act will result in permanent closure.`
+      },
+      {
+        name: "Benign newsletter",
+        text: `Weekly update: Your project timeline has been adjusted. No action required.
+Visit our portal for details. Contact support if you have questions.`
+      },
+      {
+        name: "Obfuscated phish",
+        text: `Vïsa Notice: unusual activity. Go to hxxp://visa-secure[.]verify-login[.]com and confirm.
+If you do not respond, your card may be blocked.`
+      }
+    ];
+
+    // ---- Helpers ----
+    function setLabel(kind, text) {
+      label.className = "label " + kind;
+      label.textContent = text;
+    }
+
+    function setResult(pred, p, mdl, thr) {
+      // pred: 1 = phishing, 0 = legitimate
+      // p: probability for class 1 (phishing) if provided
+      model.textContent = mdl ?? "—";
+      const t = (typeof thr === "number" && !Number.isNaN(thr)) ? thr : DEFAULT_THRESHOLD;
+      threshold.textContent = (typeof thr === "number") ? t.toFixed(2) : `${t.toFixed(2)} (default)`;
+
+      if (typeof p === "number") {
+        const pct = Math.round(p * 100);
+        prob.textContent = `${pct}%`;
+        bar.style.width = `${pct}%`;
+      } else {
+        prob.textContent = "—";
+        bar.style.width = "0%";
+      }
+
+      if (pred === 1) {
+        if (p >= 0.9) setLabel("bad", "PHISHING — high confidence");
+        else if (p >= 0.7) setLabel("bad", "PHISHING — likely");
+        else setLabel("warn", "PHISHING — uncertain");
+      } else if (pred === 0) {
+        if (p !== undefined && p <= 0.1) setLabel("good", "LEGITIMATE — high confidence");
+        else setLabel("good", "LEGITIMATE");
+      } else {
+        setLabel("warn", "Awaiting input");
+      }
+    }
+
+    function updateCount() {
+      const total = (subject.value + "\n\n" + body.value).length;
+      charCount.textContent = `${total} character${total===1?"":"s"}${total>MAX_CHARS?" • limit "+MAX_CHARS:""}`;
+      charCount.className = total > MAX_CHARS ? "count danger" : "count";
+    }
+
+    function getPayload() {
+      const text = (subject.value ? "Subject: " + subject.value + "\n\n" : "") + body.value;
+      return text.trim();
+    }
+
+    async function classify() {
+      const text = getPayload();
+      if (!text) {
+        setLabel("warn", "Please paste an email first");
+        return;
+      }
+      if (text.length > MAX_CHARS) {
+        setLabel("warn", `Input too long (>${MAX_CHARS} chars)`);
+        return;
+      }
+
+      // UI: busy state
+      const oldBtn = btnClassify.textContent;
+      btnClassify.disabled = true;
+      btnClassify.innerHTML = '<span class="spinner" aria-hidden="true"></span> Classifying...';
+      setLabel("warn", "Classifying…");
+      latency.textContent = "—";
+
+      const started = performance.now();
+
+      try {
+        const res = await fetch(PREDICT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+
+        const elapsed = performance.now() - started;
+        latency.textContent = `${elapsed.toFixed(0)} ms`;
+
+        if (!res.ok) {
+          setLabel("warn", `Server error (${res.status})`);
+          setResult(undefined, undefined, undefined, undefined);
+          return;
+        }
+
+        const out = await res.json();
+        // Expected keys: prediction, probability, model?, threshold?
+        setResult(out.prediction, out.probability, out.model, out.threshold);
+      } catch (err) {
+        latency.textContent = "—";
+        setLabel("warn", "Connection failed");
+        setResult(undefined, undefined, undefined, undefined);
+      } finally {
+        btnClassify.disabled = false;
+        btnClassify.textContent = oldBtn;
+      }
+    }
+
+    function clearAll() {
+      subject.value = "";
+      body.value = "";
+      updateCount();
+      latency.textContent = "—";
+      bar.style.width = "0%";
+      prob.textContent = "—";
+      model.textContent = "—";
+      threshold.textContent = DEFAULT_THRESHOLD.toFixed(2) + " (default)";
+      setLabel("warn", "Awaiting input");
+      body.focus();
+    }
+
+    // ---- Wire up ----
+    btnClassify.addEventListener("click", classify);
+    btnClear.addEventListener("click", clearAll);
+    body.addEventListener("input", updateCount);
+    subject.addEventListener("input", updateCount);
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") classify();
+    });
+
+    // Populate samples
+    for (const s of SAMPLE_SET) {
+      const chip = document.createElement("button");
+      chip.className = "chip";
+      chip.type = "button";
+      chip.title = "Insert sample";
+      chip.textContent = s.name;
+      chip.addEventListener("click", () => {
+        subject.value = s.name;
+        body.value = s.text;
+        updateCount();
+        body.focus();
+      });
+      samples.appendChild(chip);
+    }
+
+    // Initial state
+    updateCount();
+    setResult(undefined, undefined, undefined, undefined);
+  </script>
+</body>
+</html>

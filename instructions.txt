@@ -1,0 +1,134 @@
+Phishing Email Detector — Demo (CPU)
+====================================
+
+Scope
+-----
+A minimal Flask web app serving two classifiers:
+- TF‑IDF + SVM (calibrated probabilities)
+- BiGRU (PyTorch)
+All requests are processed **on CPU**. Inputs are not persisted; URLs should be masked in logs (e.g., `bank[.]com`).
+
+0) Prerequisites
+----------------
+- Python 3.12 installed and on PATH
+- (Optional) Git
+- Model files produced by your training code
+
+1) Create and activate a virtual environment
+--------------------------------------------
+Windows (PowerShell)
+> py -3.12 -m venv .venv
+> . .venv\Scripts\Activate.ps1
+
+macOS/Linux
+$ python3.12 -m venv .venv
+$ source .venv/bin/activate
+
+2) Install dependencies
+-----------------------
+(.venv) $ pip install -r requirements.txt
+
+If PyTorch fails on Apple Silicon or old CPUs, try the official CPU wheels:
+(.venv) $ pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+
+3) Place model artefacts
+------------------------
+Create a folder named `models/` at the repo root and copy in:
+- models/tfidf_vectoriser.pkl
+- models/svm_calibrated.pkl
+- models/tokeniser.pkl          # for BiGRU preprocessing
+- models/bigru.pt               # PyTorch weights (remove if SVM-only)
+
+If you are only demonstrating the SVM, you only need the first two files.
+
+4) (First run) Ensure NLTK resources exist
+------------------------------------------
+Only needed if your app uses stopwords/lemmatisation and doesn't auto-download.
+(.venv) $ python - <<'PY'
+import nltk
+for p in ['punkt','stopwords','wordnet','omw-1.4']:
+    try:
+        nltk.data.find(f'corpora/{p}')
+    except LookupError:
+        nltk.download(p, quiet=True)
+print('NLTK ready')
+PY
+
+5) Launch the server (CPU)
+--------------------------
+(.venv) $ python serve_app.py
+# If your entry point differs, adjust (e.g., python app.py).
+
+Expected output includes:  Running on http://127.0.0.1:5000
+
+(Alternative production-like run)
+Windows:     (.venv) > waitress-serve --port=5000 serve_app:app
+macOS/Linux: (.venv) $ gunicorn -w 1 -b 127.0.0.1:5000 serve_app:app
+
+6) Use the UI
+-------------
+Open http://127.0.0.1:5000 in a browser.
+- Subject (optional), Email body (required)
+- Click **Classify**
+- The results panel shows: probability, threshold (default 0.50), model, predicted label
+
+7) Call the API directly (optional)
+-----------------------------------
+SVM example (bash/macOS/Linux):
+$ curl -X POST http://127.0.0.1:5000/predict   -H "Content-Type: application/json"   -d '{"text":"Dear user, please verify your account within 24h...","model":"svm","threshold":0.5}'
+
+PowerShell (Windows):
+PS> Invoke-RestMethod -Uri http://127.0.0.1:5000/predict -Method POST -ContentType 'application/json' -Body '{"text":"Sample","model":"bigru"}'
+
+Expected JSON shape:
+{"label":"phish","probability":0.97,"threshold":0.50,"model":"svm"}
+
+8) Measure latency like in the paper
+------------------------------------
+Warm up 5 requests, then time 50 requests and average (bash):
+$ for i in $(seq 1 5); do curl -s -o /dev/null -X POST http://127.0.0.1:5000/predict -H 'Content-Type: application/json' -d '{"text":"sample","model":"svm"}'; done
+$ for i in $(seq 1 50); do curl -s -w "%{time_total}\n" -o /dev/null -X POST http://127.0.0.1:5000/predict -H 'Content-Type: application/json' -d '{"text":"sample","model":"svm"}'; done | awk '{s+=$1} END {printf "mean_s_per_email=%.3f\n", s/NR}'
+
+PowerShell (quick mean):
+PS> 1..5 | %%{ iwr http://127.0.0.1:5000/predict -Method POST -ContentType 'application/json' -Body '{"text":"w","model":"svm"}' > $null }
+PS> $t = ForEach ($i in 1..50) { Measure-Command { iwr http://127.0.0.1:5000/predict -Method POST -ContentType 'application/json' -Body '{"text":"w","model":"svm"}' > $null } | % TotalSeconds }; ($t | Measure-Object -Average).Average
+
+9) Configuration knobs (optional)
+---------------------------------
+- PORT: set env var `PORT` to change port (default 5000)
+  Windows:   PS> $env:PORT=5050 ; python serve_app.py
+  macOS/Linux: $ PORT=5050 python serve_app.py
+- DEFAULT_MODEL: `svm` or `bigru` (if your app supports it)
+- THRESHOLD: UI default is 0.50; results use F1‑max validation thresholds.
+
+10) Troubleshooting
+-------------------
+- **Port in use** -> choose another port or stop the other process.
+- **Module not found** -> ensure the virtual environment is active and install completed without errors.
+- **Model file not found** -> check filenames/paths expected by your code (often hard‑coded to `models/`).
+- **Torch install issues** -> use the CPU wheel command shown in Step 2.
+- **Unicode errors** -> ensure your terminal uses UTF‑8 (PowerShell: `$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()`)
+
+11) Security & ethics
+---------------------
+- Do not paste real PII; use the synthetic examples from the paper.
+- Demo runs locally and does not store inputs.
+- Ethics approval: EthOS 82160.
+
+12) Reproducibility
+-------------------
+- After a successful run, freeze the exact environment:
+  (.venv) $ pip freeze > requirements.lock.txt
+- Save your deterministic seeds/splits and F1‑max thresholds alongside the `models/` folder.
+
+Suggested repository layout
+---------------------------
+repo/
+  ├── serve_app.py
+  ├── requirements.txt
+  ├── models/
+  │   ├── tfidf_vectoriser.pkl
+  │   ├── svm_calibrated.pkl
+  │   ├── tokeniser.pkl
+  │   └── bigru.pt
+  └── static/  templates/   (if used by Flask UI)
